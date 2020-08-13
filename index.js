@@ -3,12 +3,54 @@ const github = require('@actions/github');
 
 async function run() {
 	const token = core.getInput('token');
+	const octokit = github.getOctokit(token);
 
-	// Only run for new comments on pull requests
-	if (!(github.context.eventName === 'issue_comment' 
-		&& github.context.payload.issue.pull_request
-		&& github.context.payload.action == 'created')) {
+	const pullRequest = await getAssociatedPullRequest(octokit);
+	if (pullRequest === undefined) {
+		core.setFailed('Action invoked for event other than `issue_comment.created` or `pull_request.(opened|edited)`');
 		return;
+	}
+
+	const needsTesting = pullRequest.body.toLowerCase().includes('#### what to test');
+	if (needsTesting) {
+		// Wait for the build to become available for testing before requesting
+		// reviews.
+		await requestReviewsIfBuildWasPosted(octokit, pullRequest);
+	} else {
+		// The pull request doesn't need testing, so we don't need to wait for
+		// the build to become available before requesting reviews.
+		await requestReviewsIfNeeded(octokit, pullRequest);
+	}
+}
+
+// Returns the full pull request object associated with the current action run.
+async function getAssociatedPullRequest(octokit) {
+	const { owner, repo } = github.context.repo;
+
+	if (github.context.eventName === 'issue_comment' && github.context.payload.issue.pull_request && github.context.payload.action == 'created') {
+		// When a comment gets created the payload doesn't contain a full pull
+		// request object so we need to fetch it through the GitHub API.
+		const { owner, repo } = github.context.repo;
+		const pullNumber = extractPullRequestNumber(github.context.payload.issue.pull_request.url);
+		const { data: pullRequest } = await octokit.pulls.get({
+			owner,
+			repo,
+			pull_number: pullNumber,
+		});
+		return pullRequest;
+	} else if (github.context.eventName === 'pull_request' && (github.context.payload.action == 'opened' || github.context.payload.action == 'edited')) {
+		// When a pull request is created, the payload contains the entire pull request object.
+		return github.context.payload.pull_request;
+	}
+	return undefined;
+}
+
+// Requests reviews for the given pull request if the action was triggered by
+// the build being posted in a comment on the PR.
+async function requestReviewsIfBuildWasPosted(octokit, pullRequest) {
+	if (github.context.eventName !== 'issue_comment') {
+		console.log('Waiting for build requires a comment to be posted. Nothing to do yet.');
+		return
 	}
 
 	// We look for the trigger string in the comment body to know that the build is ready
@@ -18,18 +60,16 @@ async function run() {
 		return;
 	}
 
-	const octokit = github.getOctokit(token);
+	await requestReviewsIfNeeded(octokit, pullRequest);
+}
+
+// Requests reviews for the given pull request if the pull request doesn't already
+// have any pending requests.
+async function requestReviewsIfNeeded(octokit, pullRequest) {
 	const { owner, repo } = github.context.repo;
-	const pullNumber = extractPullRequestNumber(github.context.payload.issue.pull_request.url);
 
 	// Check if the pull request already has reviewers assigned
-	const { data: pullRequest } = await octokit.pulls.get({
-		owner,
-		repo,
-		pull_number: pullNumber,
-	});
 	const hasReviewers = pullRequest.requested_reviewers !== undefined && pullRequest.requested_reviewers.length > 0;
-
 	if (hasReviewers) {
 		console.log('PR already has reviewers. Not requesting different ones.');
 		return;
@@ -41,7 +81,7 @@ async function run() {
 	await octokit.pulls.requestReviewers({
 		owner,
 		repo,
-		pull_number: pullNumber,
+		pull_number: pullRequest.number,
 		team_reviewers: [core.getInput('review_team')]
 	})
 
@@ -49,7 +89,7 @@ async function run() {
 	await octokit.issues.addLabels({
 		owner,
 		repo,
-		issue_number: pullNumber,
+		issue_number: pullRequest.number,
 		labels: [core.getInput('labels').split(', ')]
 	});
 }

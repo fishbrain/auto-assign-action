@@ -1,9 +1,8 @@
 #### auto-assign-action
-A GitHub Action that automatically assigns reviewers to pull requests. It's currently hard-coded in a way that's relevant only to the iPhone repository, but it can easily be made more reusable in the future.
+A GitHub Action that automatically assigns reviewers to pull requests. It's currently hard-coded in a way that's relevant only to the Fishbrain iPhone repository, but it can easily be made more reusable in the future.
 
 ##### Current behaviour
-The `fishbrain/ios-developers` team is assigned as a reviewer, and the _Awaiting review_ label is added, when a comment containing the URL of an OTA build is added to the PR.
-The [code review assignment settings](https://github.com/orgs/fishbrain/teams/ios-developers/edit/review_assignment) for the `fishbrain/ios-developers` team have been configured to request a review from 2 team members when the team is assigned as a reviewer.
+The action checks if the pull request needs testing based on the presence of a "what to test" section in the PR body and then either immediately requests reviews for the PR or waits until the OTA build is available for testing before requesting reviews.
 
 ##### Example workflow
 To use this action, create a new workflow YAML file in `.github/workflows/` with the following contents:
@@ -22,4 +21,7 @@ jobs:
         uses: fishbrain/auto-assign-action@v1
         with:
           token: '${{ secrets.GITHUB_TOKEN }}'
+          review_team: 'org/some-team'
+          labels: 'Awaiting review'
+          build_available_trigger: 'https://builds.yourorg.com/build/'
 ```
