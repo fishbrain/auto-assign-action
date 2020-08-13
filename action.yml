@@ -1,0 +1,18 @@
+name: 'Fishbrain Pull Request Auto Assigner'
+description: 'Automatically assign reviewers to pull requests'
+inputs:
+  token:
+    description: 'The GitHub access token.'
+    required: true
+  review_team: 
+    description: 'The team to request a review from, as a team slug (e.g. "org/some-team").'
+    required: true
+  labels:
+    description: 'A comma-separated list of labels to assign to the PR when reviews are requested.'
+    required: true
+  build_available_trigger:
+    description: 'A string to look for in pull request comments to know when a test build is available.'
+    required: true
+runs:
+  using: 'node12'
+  main: 'index.js'
