@@ -7,7 +7,12 @@ async function run() {
 
 	const pullRequest = await getAssociatedPullRequest(octokit);
 	if (pullRequest === undefined) {
-		core.setFailed('Action invoked for event other than `issue_comment.created` or `pull_request.(opened|edited)`');
+		core.setFailed('Action invoked for event other than `issue_comment.created` or `pull_request.(opened|edited|ready_for_review)`');
+		return;
+	}
+
+	if (pullRequest.draft) {
+		console.log('Pull request is marked as a draft. Nothing to do yet.');
 		return;
 	}
 
@@ -38,7 +43,7 @@ async function getAssociatedPullRequest(octokit) {
 			pull_number: pullNumber,
 		});
 		return pullRequest;
-	} else if (github.context.eventName === 'pull_request' && (github.context.payload.action == 'opened' || github.context.payload.action == 'edited')) {
+	} else if (github.context.eventName === 'pull_request' && ['opened', 'edited', 'ready_for_review'].includes(github.context.payload.action)) {
 		// When a pull request is created, the payload contains the entire pull request object.
 		return github.context.payload.pull_request;
 	}
