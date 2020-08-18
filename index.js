@@ -95,7 +95,7 @@ async function requestReviewsIfNeeded(octokit, pullRequest) {
 		owner,
 		repo,
 		issue_number: pullRequest.number,
-		labels: [core.getInput('labels').split(', ')]
+		labels: core.getInput('labels').split(', ')
 	});
 }
 
