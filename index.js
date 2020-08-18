@@ -69,7 +69,7 @@ async function requestReviewsIfBuildWasPosted(octokit, pullRequest) {
 }
 
 // Requests reviews for the given pull request if the pull request doesn't already
-// have any pending requests.
+// have any pending requests or hasn't already been approved.
 async function requestReviewsIfNeeded(octokit, pullRequest) {
 	const { owner, repo } = github.context.repo;
 
@@ -79,6 +79,18 @@ async function requestReviewsIfNeeded(octokit, pullRequest) {
 		console.log('PR already has reviewers. Not requesting different ones.');
 		return;
 	}
+
+	// Check if the pull request is already approved
+	const { data: reviews } = await octokit.pulls.listReviews({
+		owner,
+		repo,
+		pull_number: pullRequest.number
+	});
+	const isApproved = reviews.some((review) => review.state === "APPROVED");
+	if (isApproved) {
+		console.log('PR is already approved. Not requesting reviews.');
+		return;
+	};
 
 	// Request a review from the iOS team.
 	// Our review settings on GitHub will ensure that two random people from the
